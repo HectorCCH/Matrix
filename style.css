@@ -1,0 +1,304 @@
+@import url('https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&display=swap');
+
+:root {
+    --phosphor-main: #b3ffb3;
+    /* Un verde un poco más pálido/fino */
+    --phosphor-dim: #1a601a;
+    --monitor-bg-color: #1a1815;
+    /* Casi negro, muy oscuro */
+    --screen-bg: #030803;
+    --bezel-color: #0d0c0a;
+}
+
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    padding: 0;
+    height: 100vh;
+    background-color: #000;
+    /* Fondo completamente negro */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    font-family: 'Courier Prime', 'Courier New', Courier, monospace;
+    font-weight: 400;
+    /* Letra fina */
+    overflow: hidden;
+}
+
+/* Contenedor del Efecto de Pantalla CRT */
+.crt-screen {
+    width: 60vw;
+    height: 80vh;
+
+    background-color: var(--screen-bg);
+    /* Degradado radial para simular el reflejo en el cristal curvo */
+    background-image: radial-gradient(circle at center, #050b05 0%, #030803 70%);
+    color: var(--phosphor-main);
+    font-size: 1.0rem;
+    padding: 0;
+    /* Quitamos padding del contenedor para controlar bordes internamente */
+    position: relative;
+    overflow: hidden;
+    border-radius: 20px;
+    /* Pantalla un poco mas cuadrada pero manteniendo toque CRT */
+
+    /* Resplandor del texto más fuerte */
+    text-shadow:
+        0 0 2px #ccffcc,
+        0 0 10px var(--phosphor-dim),
+        0 0 25px var(--phosphor-dim);
+
+    /* Viñeta profunda eliminada para evitar cortar el brillo */
+    /* box-shadow: inset 0 0 100px rgba(0,0,0,1), inset 0 0 20px rgba(0,0,0,0.8); */
+
+    display: flex;
+    flex-direction: column;
+
+    /* Evitar selección de texto y cursor nativo al hacer clic */
+    user-select: none;
+    -webkit-user-select: none;
+    cursor: default;
+}
+
+/* Líneas de escaneo (Scanlines) */
+.scanlines {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(to bottom,
+            rgba(191, 18, 18, 0) 50%,
+            rgba(0, 0, 0, 0.25) 50%);
+    background-size: 100% 4px;
+    pointer-events: none;
+    z-index: 10;
+    opacity: 0.7;
+    /* Opacidad aumentada para un efecto de líneas más claro */
+}
+
+/* Animación de Parpadeo */
+@keyframes flicker {
+    0% {
+        opacity: 0.98;
+    }
+
+    5% {
+        opacity: 0.96;
+    }
+
+    10% {
+        opacity: 0.99;
+    }
+
+    15% {
+        opacity: 0.96;
+    }
+
+    20% {
+        opacity: 0.99;
+    }
+
+    25% {
+        opacity: 0.97;
+    }
+
+    30% {
+        opacity: 0.98;
+    }
+
+    35% {
+        opacity: 0.96;
+    }
+
+    40% {
+        opacity: 0.98;
+    }
+
+    45% {
+        opacity: 0.97;
+    }
+
+    50% {
+        opacity: 0.99;
+    }
+
+    55% {
+        opacity: 0.95;
+    }
+
+    60% {
+        opacity: 0.98;
+    }
+
+    65% {
+        opacity: 0.97;
+    }
+
+    70% {
+        opacity: 1;
+    }
+
+    75% {
+        opacity: 0.98;
+    }
+
+    80% {
+        opacity: 0.96;
+    }
+
+    85% {
+        opacity: 0.93;
+    }
+
+    90% {
+        opacity: 0.98;
+    }
+
+    95% {
+        opacity: 0.96;
+    }
+
+    100% {
+        opacity: 0.97;
+    }
+}
+
+/* Animación de parpadeo eliminada */
+/* crt-screen::before eliminado */
+
+/* Contenido del Terminal */
+.terminal-output {
+    flex-grow: 1;
+    overflow-y: auto;
+    margin-bottom: 0;
+    /* Sin margen extra */
+    padding: 40px 40px 10px 40px;
+    /* Top Right Bottom Left - Menos abajo porque viene el input */
+    scrollbar-width: none;
+    /* Máscara para desvanecimiento superior (pendiente) */
+}
+
+.terminal-output::-webkit-scrollbar {
+    display: none;
+}
+
+.line {
+    margin-bottom: 5px;
+    line-height: 1.2;
+    white-space: pre-wrap;
+}
+
+.intro-text {
+    line-height: 1.2;
+}
+
+/* Área de Entrada (Input) */
+.input-line {
+    display: flex;
+    align-items: center;
+    position: relative;
+    min-height: 30px;
+    padding: 20px 40px 40px 40px;
+    /* Añadimos padding superior e inferior para equilibrar y separar del terminal */
+}
+
+.prompt {
+    margin-right: 12px;
+}
+
+.input-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+    flex-grow: 1;
+}
+
+#input-display {
+    white-space: pre;
+    min-height: 20px;
+}
+
+/* Input real oculto */
+#command-input {
+    position: absolute;
+    opacity: 0;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    cursor: default;
+}
+
+/* Cursor de Bloque */
+.cursor {
+    display: inline-block;
+    min-width: 14px;
+    text-align: center;
+    /* Mínimo para espacios/vacío */
+    background-color: var(--phosphor-main);
+    color: #000;
+    /* Texto negro sobre fondo verde inicial */
+    animation: blink 1s step-end infinite;
+    box-shadow: 0 0 10px var(--phosphor-main);
+    /* Resplandor del bloque */
+    text-shadow: none;
+    /* El texto negro no debe brillar */
+    vertical-align: text-bottom;
+    /* Alinear con el texto */
+}
+
+/* Ocultar input COMPLETO solo durante la intro inicial */
+.intro-hide .input-line {
+    opacity: 0;
+    pointer-events: none;
+}
+
+/* Durante escritura normal: solo ocultar el cursor del jugador */
+.typing-active .input-line .cursor {
+    display: none;
+}
+
+/* Cursor de la Terminal (durante escritura automática) */
+.game-cursor {
+    display: inline-block;
+    width: 14px;
+    height: 1.2em;
+    background-color: var(--phosphor-main);
+    box-shadow: 0 0 10px var(--phosphor-main);
+    vertical-align: text-bottom;
+    margin-left: 2px;
+}
+
+/* Modificador para que el cursor de la terminal parpadee (ej. al inicio) */
+.game-cursor.blink {
+    animation: blink 1s step-end infinite;
+}
+
+@keyframes blink {
+
+    0%,
+    50% {
+        opacity: 1;
+        /* Visible (Invertido) */
+        background-color: var(--phosphor-main);
+        color: #000;
+        box-shadow: 0 0 10px var(--phosphor-main);
+    }
+
+    51%,
+    100% {
+        /* Estado "Invisible" -> Bloque Transparente, texto normal (verde) */
+        background-color: transparent;
+        color: var(--phosphor-main);
+        /* Texto verde normal */
+        box-shadow: none;
+        text-shadow: inherit;
+    }
+}
+
+/* LED de encendido eliminado */
