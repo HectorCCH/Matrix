@@ -90,6 +90,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (isTyping) {
             if (e.key === 'Enter') skipCurrent = true;
+            // Permitir recargar la página (F5 o Ctrl+R)
+            if (e.key === 'F5' || (e.ctrlKey && e.key === 'r')) return;
             e.preventDefault(); // Bloquear cualquier otra tecla durante animaciones
             return;
         }
@@ -225,7 +227,9 @@ document.addEventListener('DOMContentLoaded', () => {
                     if (!gameState.flags.read_message) {
                         printLine("Te acercas al monitor. El texto verde ya no está... 'Sigue al conejo blanco'.");
                         printLine("De repente, un sonido seco te sobresalta.", "important");
+                        printLine("<br>");
                         printLine("¡TOC TOC TOC!", "important");
+                        printLine("<br>");
                         printLine("Alguien golpea tu 'PUERTA'.", "important");
                         gameState.flags.door_knocked = true;
                         gameState.flags.read_message = true;
@@ -243,7 +247,6 @@ document.addEventListener('DOMContentLoaded', () => {
                             printLine("Abres la puerta ligeramente.", "info");
                             printLine("- CHOI: ¡Eh, colega! ¿Tienes lo mío?", "dialog");
                             printLine("- NEO: Claro, espera un segundo.", "dialog");
-                            printLine("<br>");
                             printLine("Cierras la puerta. Necesitas el 'DISCO' antes de salir.", "info");
                         }
                     } else {
@@ -268,7 +271,7 @@ document.addEventListener('DOMContentLoaded', () => {
             exits: { 'ascensor': 'calle' }
         },
         'calle': {
-            description: "La ciudad gótica bajo la lluvia. Luces de neón se reflejan en los charcos. Al final de la calle ves el cartel del 'CLUB': 'The End'.",
+            description: "Tras bajar en ascensor, ves la ciudad gótica bajo la lluvia. Luces de neón se reflejan en los charcos. Al final de la calle ves el cartel del 'CLUB': 'The End'.",
             exits: { 'club': 'club', 'entrar': 'club' }
         },
         'club': {
@@ -342,7 +345,7 @@ document.addEventListener('DOMContentLoaded', () => {
             "- NEO: ¿Qué es Matrix?",
             "- TRINITY: La respuesta la encontrarás por ahí. Te está buscando... y te encontrará, siempre que lo desee.",
             "<br>",
-            "(Trinity se acerca a tu oído y susurra:)",
+            "(Trinity se acerca a tu oído y susurra)",
             "<br>",
             "- TRINITY: Despierta, Neo."
         ]
@@ -635,7 +638,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // 1. Bloque inicial (2 líneas)
         await printLine("Call trans opt: received. 2-19-98 13:24:18 REC:Log>", "intro-text");
         await printLine("Trace program: running", "intro-text");
-        await waitAndClear(1000);
+        await waitAndClear(2000);
 
         // 2. Líneas individuales
         await printLine("Despierta, Neo...", "intro-text");
@@ -645,13 +648,13 @@ document.addEventListener('DOMContentLoaded', () => {
         await waitAndClear(1500);
 
         await printLine("Sigue al conejo blanco.", "intro-text");
-        await waitAndClear(1500);
+        await waitAndClear(2000);
 
         await printLine("Knok, Knok, Neo.", "intro-text");
         await waitAndClear(1500);
 
         // Mensaje final (no se borra)
-        await printLine("Escribe 'AYUDA' si quieres saber los comandos o 'MIRAR' si quieres empezar.", "intro-text");
+        await printLine("Escribe 'AYUDA' si quieres los comandos o 'MIRAR' si quieres empezar.", "intro-text");
 
         // Fin de la intro: permitir input del jugador
         screen.classList.remove('intro-hide');
@@ -666,8 +669,12 @@ document.addEventListener('DOMContentLoaded', () => {
     output.appendChild(initialWaitLine);
 
     // Iniciar juego al hacer clic o pulsar tecla
-    function initGame() {
+    function initGame(e) {
         if (gameStarted) return;
+
+        // Ignorar teclas de función (F1-F12)
+        if (e && e.type === 'keydown' && /^F\d+$/.test(e.key)) return;
+
         gameStarted = true;
 
         audio.init();
