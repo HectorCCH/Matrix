@@ -90,8 +90,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (isTyping) {
             if (e.key === 'Enter') skipCurrent = true;
-            // Permitir recargar la página (F5 o Ctrl+R)
-            if (e.key === 'F5' || (e.ctrlKey && e.key === 'r')) return;
+            // Permitir recargar la página (F5 o Ctrl+R) y pantalla completa (F11)
+            if (e.key === 'F5' || (e.ctrlKey && e.key === 'r') || e.key === 'F11') return;
             e.preventDefault(); // Bloquear cualquier otra tecla durante animaciones
             return;
         }
@@ -672,8 +672,8 @@ document.addEventListener('DOMContentLoaded', () => {
     function initGame(e) {
         if (gameStarted) return;
 
-        // Ignorar teclas de función (F1-F12)
-        if (e && e.type === 'keydown' && /^F\d+$/.test(e.key)) return;
+        // Ignorar teclas de función (F1-F12) y Escape
+        if (e && e.type === 'keydown' && (/^F\d+$/.test(e.key) || e.key === 'Escape')) return;
 
         gameStarted = true;
 
