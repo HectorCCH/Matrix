@@ -1,8 +1,15 @@
 document.addEventListener('DOMContentLoaded', () => {
     const input = document.getElementById('command-input');
     const inputDisplay = document.getElementById('input-display');
+    const inputWrapper = document.querySelector('.input-wrapper');
     const output = document.getElementById('output');
     const screen = document.getElementById('crt-screen');
+
+    let messageQueue = [];
+    let isTyping = false;
+    let skipCurrent = false;
+    let userScrolledUp = false;
+    let gameStarted = false;
 
     // Ocultar input inicialmente (solo para la intro)
     screen.classList.add('intro-hide');
@@ -30,6 +37,23 @@ document.addEventListener('DOMContentLoaded', () => {
             // Más agudo (8000Hz) y volumen reducido
             this.beep(200 + Math.random() * 50, 'square', 0.025, 0.02);
             this.beep(8000 + Math.random() * 1000, 'sine', 0.025, 0.01);
+        },
+        matrixSoundInterval: null,
+        startMatrixAudio() {
+            if (!this.enabled) return;
+            this.init();
+            this.stopMatrixAudio();
+
+            // Mismo sonido de tecleo que cuando la terminal escribe texto
+            this.matrixSoundInterval = setInterval(() => {
+                this.playKey();
+            }, 35);
+        },
+        stopMatrixAudio() {
+            if (this.matrixSoundInterval) {
+                clearInterval(this.matrixSoundInterval);
+                this.matrixSoundInterval = null;
+            }
         }
     };
 
@@ -67,6 +91,14 @@ document.addEventListener('DOMContentLoaded', () => {
             postSpan.textContent = val.substring(caretPos + 1);
             inputDisplay.appendChild(postSpan);
         }
+
+        if (typeof userScrolledUp !== 'undefined' && !userScrolledUp) {
+            output.scrollTop = output.scrollHeight;
+        }
+
+        if (inputWrapper) {
+            inputWrapper.scrollTop = inputWrapper.scrollHeight;
+        }
     }
 
     ['input', 'keydown', 'keyup', 'click', 'focus', 'blur'].forEach(evt => {
@@ -77,10 +109,23 @@ document.addEventListener('DOMContentLoaded', () => {
 
     updateInputDisplay();
 
-    let messageQueue = [];
-    let isTyping = false;
-    let skipCurrent = false;
-    let gameStarted = false; // Mover aquí para que sea accesible
+    output.addEventListener('scroll', () => {
+        const distanceFromBottom = output.scrollHeight - output.scrollTop - output.clientHeight;
+        if (distanceFromBottom <= 30) {
+            userScrolledUp = false;
+        } else {
+            userScrolledUp = true;
+        }
+    });
+
+    window.addEventListener('wheel', (e) => {
+        if (e.target !== output && !output.contains(e.target)) {
+            output.scrollTop += e.deltaY;
+        }
+        if (e.deltaY < 0) {
+            userScrolledUp = true;
+        }
+    }, { passive: true });
 
     input.addEventListener('keydown', (e) => {
         audio.init();
@@ -88,10 +133,25 @@ document.addEventListener('DOMContentLoaded', () => {
         // No procesar input antes de que el juego haya iniciado
         if (!gameStarted) return;
 
+        // Permitir PageUp y PageDown para hacer scroll manual por la terminal
+        if (e.key === 'PageUp') {
+            output.scrollTop -= output.clientHeight * 0.75;
+            userScrolledUp = true;
+            e.preventDefault();
+            return;
+        } else if (e.key === 'PageDown') {
+            output.scrollTop += output.clientHeight * 0.75;
+            e.preventDefault();
+            return;
+        }
+
         if (isTyping) {
-            if (e.key === 'Enter') skipCurrent = true;
-            // Permitir recargar la página (F5 o Ctrl+R) y pantalla completa (F11)
-            if (e.key === 'F5' || (e.ctrlKey && e.key === 'r') || e.key === 'F11') return;
+            if (e.key === 'Enter') {
+                skipCurrent = true;
+                userScrolledUp = false;
+            }
+            // Permitir recargar la página (F5 o Ctrl+R) y pantalla completa (F11 o Esc)
+            if (e.key === 'F5' || (e.ctrlKey && e.key === 'r') || e.key === 'F11' || e.key === 'Escape') return;
             e.preventDefault(); // Bloquear cualquier otra tecla durante animaciones
             return;
         }
@@ -101,6 +161,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (e.key === 'Enter') {
             const command = input.value;
+            skipCurrent = false;
+            userScrolledUp = false;
+            output.scrollTop = output.scrollHeight;
             printLine("<br>", "standard", false); // Separator
             printLine('> ' + command, 'standard', false);
             processCommand(command);
@@ -169,7 +232,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (!animated || skipCurrent) {
             line.innerHTML = text;
-            output.scrollTop = output.scrollHeight;
+            if (!userScrolledUp || skipCurrent) {
+                output.scrollTop = output.scrollHeight;
+            }
             resolve();
             processQueue();
             return;
@@ -194,12 +259,17 @@ document.addEventListener('DOMContentLoaded', () => {
                     i++;
                 }
                 contentSpan.innerHTML = currentText;
-                output.scrollTop = output.scrollHeight;
+                if (!userScrolledUp) {
+                    output.scrollTop = output.scrollHeight;
+                }
                 audio.playKey();
             } else {
                 clearInterval(typingInterval);
                 if (skipCurrent) contentSpan.innerHTML = text;
                 gameCursor.remove();
+                if (!userScrolledUp || skipCurrent) {
+                    output.scrollTop = output.scrollHeight;
+                }
                 resolve();
                 processQueue();
             }
@@ -218,9 +288,26 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
+    const rabbitAscii = `                .".
+               /  |
+              /  /
+             / ,"
+  .-------.--- /
+ "._ __.-/ o. o\\
+     "   (    Y )
+         )     /
+        /       Y
+     .-"         |
+    /  _     \\    \\
+   /    \`. ". ) /' )
+  Y       )( / /(,/
+ ,|      /     )
+ " \\_  (__    (_
+     "-._,)--._,)`;
+
     const world = {
         'habitacion_101': {
-            description: "Habitación 101. Tu apartamento parece una celda tecnológica. Montañas de hardware, cables y monitores brillan en la oscuridad.<br>Tu 'ORDENADOR' principal está activo.<br>Una 'ESTANTERIA' vieja se apoya contra la pared.<br>Al fondo, la 'PUERTA' de salida.",
+            description: "Habitación 101. Tu apartamento parece una celda tecnológica. Montañas de 'HARDWARE' y 'CABLES' brillan en la oscuridad.<br>Tu 'ORDENADOR' principal está activo.<br>Una 'ESTANTERIA' vieja se apoya contra la pared.<br>Al fondo, la 'PUERTA' de salida.",
             items: [],
             interactables: {
                 'ordenador': () => {
@@ -234,51 +321,79 @@ document.addEventListener('DOMContentLoaded', () => {
                         gameState.flags.door_knocked = true;
                         gameState.flags.read_message = true;
                     } else {
-                        printLine("El monitor solo muestra el cursor parpadeando. Esperando...");
+                        printLine("El monitor de fósforo verde muestra un cursor parpadeante sobre fondo negro. La conexión remota se ha cortado.");
                     }
                 },
-                'estanteria': "Está llena de libros técnicos y filosofía barata. Un 'LIBRO' destaca de entre el resto: 'Simulacra & Simulation'.",
+                'estanteria': "Una estantería metálica repleta de manuales sobre UNIX, libros de computación cuántica y filosofía. Un 'LIBRO' destaca entre todos: 'Simulacra & Simulation'.",
                 'puerta': () => {
                     if (gameState.flags.door_knocked) {
-                        if (gameState.flags.has_disk) {
-                            printLine("Abres la puerta. CHOI, DUJOUR y tres personas más están allí.");
-                            startDialog('choi_encounter');
-                        } else {
-                            printLine("Abres la puerta ligeramente.", "info");
-                            printLine("- CHOI: ¡Eh, colega! ¿Tienes lo mío?", "dialog");
-                            printLine("- NEO: Claro, espera un segundo.", "dialog");
-                            printLine("Cierras la puerta. Necesitas el 'DISCO' antes de salir.", "info");
-                        }
+                        printLine("Alguien está golpeando con insistencia desde el pasillo. Deberías 'ABRIR' la 'PUERTA'.");
                     } else {
-                        printLine("No tienes motivos para salir aún. Deberías revisar tu 'ORDENADOR'.");
+                        printLine("La pesada puerta blindada de tu apartamento. Está cerrada con tres cerrojos. No tienes motivos para salir aún.");
                     }
                 },
                 'libro': () => {
-                    printLine("Sacas 'Simulacra & Simulation'. Lo abres por el capítulo 'On Nihilism'.");
+                    printLine("Sacas 'Simulacra & Simulation' de Jean Baudrillard. Lo abres por el capítulo 'Sobre el nihilismo'.");
                     if (!gameState.flags.has_disk) {
-                        printLine("Dentro hay un hueco recortado. Contiene un MiniDisc pirata: DISK 067'.");
+                        printLine("Las páginas centrales están recortadas formando un escondite secreto. En su interior descansa un MiniDisc pirata etiquetado como 'DISCO'.");
                         printLine("Añades el 'DISCO' a tu inventario.");
                         gameState.inventory.push('disco');
                         gameState.flags.has_disk = true;
                     } else {
-                        printLine("El hueco secreto está vacío.");
+                        printLine("El hueco secreto tallado en las páginas está vacío.");
                     }
-                }
+                },
+                'disco': () => {
+                    if (gameState.flags.has_disk) {
+                        printLine("Un MiniDisc óptico de alta densidad con el rótulo manuscrito 'DISK 067'. Contiene el software ilegal encriptado que Choi te encargó.");
+                    } else {
+                        printLine("No ves ningún disco a simple vista. Debe de estar oculto en algún lugar seguro del apartamento.");
+                    }
+                },
+                'hardware': "Torres abiertas, placas de circuitos integrados y procesadores desoldados se amontonan sobre la mesa de trabajo.",
+                'cables': "Una maraña de cables de alimentación, fibra óptica y líneas coaxiales que recorren el suelo como serpientes negras."
             }
         },
         'pasillo': {
-            description: "El pasillo del edificio es lúgubre y huele a humedad. 'CHOI' y su chica, 'DUJOUR', están esperando junto al ascensor.",
-            exits: { 'ascensor': 'calle' }
+            description: "El pasillo del edificio es lúgubre y huele a humedad. 'CHOI' y su chica, 'DUJOUR', están esperando junto al 'ASCENSOR'.",
+            exits: { 'ascensor': 'calle' },
+            interactables: {
+                'ascensor': "El viejo ascensor del edificio con rejas de hierro forjado. La cabina cuelga de gruesos cables en el hueco oscuro. Puedes 'ABRIR' o 'IR' al 'ASCENSOR' para bajar a la calle.",
+                'choi': "- CHOI: Vamos Neo, date prisa tío, el club nos espera. Esta noche necesitas desconectar de tantas pantallas.",
+                'dujour': "Dujour te observa fijamente con una sonrisa enigmática. Lleva una cazadora negra de vinilo y en su hombro descubierto resalta el tatuaje de un 'CONEJO' blanco.",
+                'conejo': () => {
+                    printLine("Un pequeño tatuaje de un conejo blanco en la piel pálida de Dujour. Un escalofrío te sacude al recordarlo... 'Sigue al conejo blanco'.");
+                    printLine(rabbitAscii);
+                },
+                'tatuaje': () => {
+                    printLine("Un pequeño tatuaje de un conejo blanco en la piel pálida de Dujour. Un escalofrío te sacude al recordarlo... 'Sigue al conejo blanco'.");
+                    printLine(rabbitAscii);
+                }
+            }
         },
         'calle': {
-            description: "Tras bajar en ascensor, ves la ciudad gótica bajo la lluvia. Luces de neón se reflejan en los charcos. Al final de la calle ves el cartel del 'CLUB': 'The End'.",
-            exits: { 'club': 'club', 'entrar': 'club' }
+            description: "Tras bajar en ascensor, ves la ciudad gótica bajo la 'LLUVIA'. Luces de 'NEON' se reflejan en los 'CHARCOS'. Al final de la calle ves el cartel del 'CLUB': 'The End'.",
+            exits: { 'club': 'club' },
+            interactables: {
+                'club': "Un club subterráneo de ambiente industrial llamado 'The End'. Por las puertas entreabiertas escapan densas columnas de humo y un bajo atronador de música electrónica.",
+                'lluvia': "Una lluvia fina pero helada cae sobre el asfalto gastado, distorsionando las luces de la metrópolis.",
+                'neon': "Un cartel de neón gastado zumba sobre tu cabeza reflejando tonos fríos en las fachadas de ladrillo húmedo.",
+                'charcos': "Los charcos oscuros en el suelo reflejan los destellos verdes y violetas de los carteles luminosos."
+            }
         },
         'club': {
-            description: "La música industrial golpea tu pecho. Esta sonando Dragula de Rob Zombie. Humo, cuero y oscuridad. En una esquina, una figura te observa. Es 'ELLA'.",
+            description: "La 'MUSICA' industrial golpea tu pecho. Esta sonando Dragula de Rob Zombie. 'HUMO', cuero y oscuridad. En una esquina, una figura te observa. Es 'ELLA'.",
             interactables: {
-                'ella': () => startDialog('trinity_encounter'),
-                'trinity': () => startDialog('trinity_encounter')
+                'ella': () => {
+                    printLine("Una mujer de vinilo negro te observa con calma absoluta desde una esquina en penumbra. Sus ojos parecen ver a través de ti.");
+                    startDialog('trinity_encounter');
+                },
+                'trinity': () => {
+                    printLine("Una mujer de vinilo negro te observa con calma absoluta desde una esquina en penumbra. Sus ojos parecen ver a través de ti.");
+                    startDialog('trinity_encounter');
+                },
+                'musica': "El bajo implacable de Rob Zombie hace vibrar el suelo de hormigón y retumba directamente en tu pecho.",
+                'humo': "Nubes de humo dulce y niebla artificial flotan entre los focos estroboscópicos."
             }
         }
     };
@@ -303,24 +418,7 @@ document.addEventListener('DOMContentLoaded', () => {
             "<br>",
             "(DUJOUR te mira con curiosidad. Lleva un tatuaje en el hombro: un conejo blanco...)",
             "<br>",
-
-            `                .".
-               /  |
-              /  /
-             / ,"
-  .-------.--- /
- "._ __.-/ o. o\\
-     "   (    Y )
-         )     /
-        /       Y
-     .-"         |
-    /  _     \\    \\
-   /    \`. ". ) /' )
-  Y       )( / /(,/
- ,|      /     )
- " \\_  (__    (_
-     "-._,)--._,)`,
-
+            rabbitAscii,
             "<br>",
             "- DUJOUR: ¿Nos lo llevamos?",
             "- CHOI: Claro. Ven con nosotros, Neo. Tienes que desconectar.",
@@ -368,7 +466,7 @@ document.addEventListener('DOMContentLoaded', () => {
             gameState.inventory = gameState.inventory.filter(item => item !== 'disco');
 
             setTimeout(() => {
-                printLine("<br>Sales al pasillo. Puedes ir al 'ASCENSOR' para bajar a la calle.", 'info');
+                printLine("<br>Sales al pasillo. 'CHOI' y 'DUJOUR' te esperan junto al 'ASCENSOR'.", 'info');
                 gameState.flags.met_choi = true;
             }, 500);
         } else if (dialogId === 'trinity_encounter') {
@@ -446,6 +544,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
 
             const intervalId = setInterval(draw, 30);
+            audio.startMatrixAudio();
 
             // Si es modo salvapantallas, permitir salir con Enter
             if (isScreensaver) {
@@ -454,6 +553,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         e.preventDefault();
                         e.stopPropagation();
                         clearInterval(intervalId);
+                        audio.stopMatrixAudio();
                         canvas.remove();
 
                         // Restaurar vista
@@ -471,21 +571,28 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     const commands = {
+        'conejo': () => { printLine(rabbitAscii); },
         'cmatrix': () => { startMatrixEffect(true); },
+        'matrix': () => { startMatrixEffect(true); },
         'ayuda': () => {
             printLine("COMANDOS DISPONIBLES:");
-            printLine("- MIRAR [COSA]: Observa algo (ordenador, puerta, libro...).");
-            printLine("- COGER [OBJETO]: Recoge algo.");
-            printLine("- ABRIR [COSA]: Abre puertas, libros, etc.");
-            printLine("- IR [SITIO]: Muévete a otro lugar.");
+            printLine("- MIRAR [OBJETO]: Observa algo del entorno.");
+            printLine("- COGER [OBJETO]: Recoge un objeto.");
+            printLine("- ABRIR [OBJETO]: Abre puertas, libros o accesos.");
+            printLine("- IR [LUGAR]: Muévete a un lugar o acceso.");
             printLine("- INVENTARIO: Mira lo que llevas.");
             printLine("- LIMPIAR: Limpia la terminal.");
             printLine("<br>", "standard", false);
         },
-        'limpiar': () => { output.innerHTML = ''; },
+        'limpiar': () => { output.innerHTML = ''; userScrolledUp = false; },
+        'inventario': () => {
+            if (gameState.inventory.length === 0) printLine("Bolsillos vacíos.");
+            else printLine("Inventario: " + gameState.inventory.join(', '));
+            printLine("<br>", "standard", false);
+        },
         'mirar': (args) => {
             const room = world[gameState.currentLocation];
-            const target = args.join(' ');
+            const target = cleanTarget(args);
 
             if (!target) {
                 printLine(room.description, 'info');
@@ -494,7 +601,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
 
-            // Mirar objetos específicos
+            // Alias comunes de sala
+            if (target === 'alrededor' || target === 'habitacion' || target === 'sala' || target === 'pasillo' || target === 'calle' || target === 'club') {
+                printLine(room.description, 'info');
+                return;
+            }
+
+            // Mirar objetos específicos exactos
             if (room.interactables && room.interactables[target]) {
                 const interaction = room.interactables[target];
                 if (typeof interaction === 'function') interaction();
@@ -502,61 +615,308 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
 
-            // Alias comunes
-            if (target === 'alrededor' || target === 'habitacion' || target === 'sala') {
-                printLine(room.description, 'info');
-                return;
+            // Búsqueda por coincidencia parcial en interactables
+            if (room.interactables) {
+                for (const key of Object.keys(room.interactables)) {
+                    if (target.includes(key) || key.includes(target)) {
+                        const interaction = room.interactables[key];
+                        if (typeof interaction === 'function') interaction();
+                        else printLine(interaction);
+                        return;
+                    }
+                }
             }
 
             printLine("No ves nada especial en eso.");
         },
-        'inventario': () => {
-            if (gameState.inventory.length === 0) printLine("Bolsillos vacíos.");
-            else printLine("Inventario: " + gameState.inventory.join(', '));
-            printLine("<br>", "standard", false);
-        },
         'coger': (args) => {
-            const item = args.join(' ');
-            // Caso especial libro/disco
-            if (item === 'disco' && gameState.currentLocation === 'habitacion_101') {
-                if (gameState.flags.has_disk) printLine("Ya lo tienes.");
-                else printLine("No lo ves. Quizás esté escondido.");
+            const target = cleanTarget(args);
+            if (!target) {
+                printLine("¿Qué quieres coger?");
                 return;
             }
-            if (item === 'libro' && gameState.currentLocation === 'habitacion_101') {
-                world['habitacion_101'].interactables['libro']();
-                return;
+
+            if (gameState.currentLocation === 'habitacion_101') {
+                if (target === 'disco') {
+                    if (gameState.flags.has_disk) {
+                        printLine("Ya tienes el 'DISCO' en tu inventario.");
+                    } else {
+                        printLine("No ves ningún disco a simple vista. Quizás esté escondido.");
+                    }
+                    return;
+                }
+                if (target === 'libro' || target === 'simulacra') {
+                    world['habitacion_101'].interactables['libro']();
+                    return;
+                }
+                if (target === 'ordenador') {
+                    printLine("Pesa demasiado y está conectado a una maraña de cables.");
+                    return;
+                }
+                if (target === 'estanteria') {
+                    printLine("No puedes llevarte un mueble entero.");
+                    return;
+                }
+                if (target === 'puerta') {
+                    printLine("La puerta está sólidamente anclada al marco.");
+                    return;
+                }
+                if (target === 'hardware') {
+                    printLine("Las placas base y procesadores están calientes por el funcionamiento.");
+                    return;
+                }
+                if (target === 'cables') {
+                    printLine("Están enredados alimentando los equipos; mejor no desconectarlos.");
+                    return;
+                }
             }
+
+            if (gameState.currentLocation === 'pasillo') {
+                if (target === 'ascensor') {
+                    printLine("No puedes coger un ascensor. Prueba a 'ABRIR' o 'IR' al 'ASCENSOR'.");
+                    return;
+                }
+                if (target === 'choi') {
+                    printLine("Choi se ríe y te da un codazo amistoso: 'Guarda esa energía para el club, colega'.");
+                    return;
+                }
+                if (target === 'dujour') {
+                    printLine("Dujour te aparta con una sonrisa pícara: 'Despacio, vaquero... guárdate para el club'.");
+                    return;
+                }
+                if (target === 'conejo' || target === 'tatuaje') {
+                    printLine("Es un tatuaje en la piel de Dujour, no puedes cogerlo.");
+                    return;
+                }
+            }
+
+            if (gameState.currentLocation === 'calle') {
+                if (target === 'club') {
+                    printLine("No puedes coger un edificio entero.");
+                    return;
+                }
+                if (target === 'lluvia') {
+                    printLine("El agua resbala entre tus dedos.");
+                    return;
+                }
+                if (target === 'neon') {
+                    printLine("El cartel de neón cuelga en lo alto, fuera de tu alcance.");
+                    return;
+                }
+                if (target === 'charcos') {
+                    printLine("Solo te mojarías las manos de agua sucia.");
+                    return;
+                }
+            }
+
+            if (gameState.currentLocation === 'club') {
+                if (target === 'ella' || target === 'trinity') {
+                    printLine("Te acercas con cautela a ella en la penumbra...");
+                    startDialog('trinity_encounter');
+                    return;
+                }
+                if (target === 'musica') {
+                    printLine("No puedes coger la música, solo sentirla en el pecho.");
+                    return;
+                }
+                if (target === 'humo') {
+                    printLine("El humo se disipa entre tus dedos.");
+                    return;
+                }
+            }
+
             printLine("No puedes coger eso.");
         },
         'abrir': (args) => {
-            const target = args.join(' ');
-            const room = world[gameState.currentLocation];
-            if (target === 'puerta' && gameState.currentLocation === 'habitacion_101') {
-                world['habitacion_101'].interactables['puerta']();
+            const target = cleanTarget(args);
+            if (!target) {
+                printLine("¿Qué quieres abrir?");
                 return;
             }
-            if ((target === 'libro' || target === 'simulacra') && gameState.currentLocation === 'habitacion_101') {
-                world['habitacion_101'].interactables['libro']();
-                return;
+
+            if (gameState.currentLocation === 'habitacion_101') {
+                if (target === 'puerta') {
+                    if (gameState.flags.door_knocked) {
+                        if (gameState.flags.has_disk) {
+                            printLine("Abres la puerta. 'CHOI', 'DUJOUR' y tres personas más están allí.");
+                            startDialog('choi_encounter');
+                        } else {
+                            printLine("Abres la puerta ligeramente sujeta por la cadena de seguridad.", "info");
+                            printLine("- CHOI: ¡Eh, colega! ¿Tienes lo mío?", "dialog");
+                            printLine("- NEO: Claro, espera un segundo.", "dialog");
+                            printLine("Cierras la puerta. Necesitas el 'DISCO' antes de salir.", "info");
+                        }
+                    } else {
+                        printLine("No tienes motivos para salir aún. Deberías revisar tu 'ORDENADOR'.");
+                    }
+                    return;
+                }
+                if (target === 'libro' || target === 'simulacra') {
+                    world['habitacion_101'].interactables['libro']();
+                    return;
+                }
+                if (target === 'ordenador') {
+                    printLine("La torre ya tiene el panel lateral retirado; los ventiladores zumban a toda velocidad.");
+                    return;
+                }
+                if (target === 'estanteria') {
+                    printLine("Es una estantería abierta de madera, no tiene puertas.");
+                    return;
+                }
+                if (target === 'disco') {
+                    printLine("El MiniDisc está sellado en su estuche. Si lo abres, destruirás los datos magnéticos.");
+                    return;
+                }
+                if (target === 'hardware') {
+                    printLine("Las torres ya están completamente desarmadas.");
+                    return;
+                }
+                if (target === 'cables') {
+                    printLine("No se pueden abrir cables.");
+                    return;
+                }
             }
+
+            if (gameState.currentLocation === 'pasillo') {
+                if (target === 'ascensor') {
+                    printLine("Abres las puertas metálicas del ascensor y entras con Choi y Dujour.");
+                    handleMovement('ascensor');
+                    return;
+                }
+                if (target === 'puerta') {
+                    printLine("La puerta de tu apartamento ya está cerrada detrás de ti.");
+                    return;
+                }
+                if (target === 'choi' || target === 'dujour') {
+                    printLine("No tiene sentido abrir a una persona.");
+                    return;
+                }
+            }
+
+            if (gameState.currentLocation === 'calle') {
+                if (target === 'club') {
+                    printLine("Empujas la pesada puerta acústica del club y entras con el grupo.");
+                    handleMovement('club');
+                    return;
+                }
+            }
+
             printLine("No se puede abrir.");
+        },
+        'ir': (args) => {
+            const target = cleanTarget(args);
+            if (!target) {
+                printLine("¿Adónde quieres ir?");
+                return;
+            }
+
+            if (gameState.currentLocation === 'habitacion_101') {
+                if (target === 'puerta') {
+                    if (gameState.flags.door_knocked) {
+                        if (gameState.flags.has_disk) {
+                            printLine("Vas hacia la puerta y la abres. 'CHOI', 'DUJOUR' y tres personas más están allí.");
+                            startDialog('choi_encounter');
+                        } else {
+                            printLine("Te acercas a la puerta y la abres ligeramente.", "info");
+                            printLine("- CHOI: ¡Eh, colega! ¿Tienes lo mío?", "dialog");
+                            printLine("- NEO: Claro, espera un segundo.", "dialog");
+                            printLine("Cierras la puerta. Necesitas el 'DISCO' antes de salir.", "info");
+                        }
+                    } else {
+                        printLine("Te acercas a la puerta, pero está cerrada. No tienes motivos para salir aún.");
+                    }
+                    return;
+                }
+                if (target === 'ordenador') {
+                    world['habitacion_101'].interactables['ordenador']();
+                    return;
+                }
+                if (target === 'estanteria') {
+                    printLine("Te acercas a la estantería de libros técnicos y filosofía.");
+                    return;
+                }
+                if (target === 'libro') {
+                    world['habitacion_101'].interactables['libro']();
+                    return;
+                }
+                if (target === 'hardware' || target === 'cables') {
+                    printLine("Te agachas junto a los montones de hardware y cables.");
+                    return;
+                }
+            }
+
+            if (gameState.currentLocation === 'pasillo') {
+                if (target === 'ascensor') {
+                    printLine("Entras al ascensor con Choi y Dujour.");
+                    handleMovement('ascensor');
+                    return;
+                }
+                if (target === 'choi') {
+                    printLine("Ya estás al lado de Choi en el pasillo.");
+                    return;
+                }
+                if (target === 'dujour') {
+                    printLine("Te aproximas a Dujour. Su perfume y su mirada te envuelven.");
+                    return;
+                }
+                if (target === 'conejo') {
+                    printLine("Miras de cerca el tatuaje en el hombro de Dujour.");
+                    return;
+                }
+            }
+
+            if (gameState.currentLocation === 'calle') {
+                if (target === 'club') {
+                    printLine("Caminas bajo la lluvia hacia la entrada del club...");
+                    handleMovement('club');
+                    return;
+                }
+            }
+
+            if (gameState.currentLocation === 'club') {
+                if (target === 'ella' || target === 'trinity') {
+                    printLine("Te abres paso entre la multitud hasta llegar a su rincón...");
+                    startDialog('trinity_encounter');
+                    return;
+                }
+            }
+
+            handleMovement(target);
         }
     };
 
+    function cleanTarget(args) {
+        if (!args || args.length === 0) return '';
+        let t = args.join(' ').toLowerCase().trim();
+        t = t.replace(/^[«<"']+|[»>"'.,;!?]+$/g, '').trim();
+        return t;
+    }
+
     function processCommand(rawInput) {
-        const cleanInput = rawInput.trim().toLowerCase();
-        const parts = cleanInput.split(' ');
+        let cleanInput = rawInput.trim().toLowerCase();
+        cleanInput = cleanInput.replace(/^[«<"']+|[»>"'.,;!?]+$/g, '').trim();
+        if (cleanInput === '') return;
+
+        // Easter egg / comando directo: conejo o conejo blanco
+        if (cleanInput === 'conejo' || cleanInput === 'conejo blanco') {
+            printLine(rabbitAscii);
+            return;
+        }
+
+        const parts = cleanInput.split(/\s+/);
         const mainCommand = parts[0];
         const args = parts.slice(1);
 
-        if (cleanInput === '') return;
-
-        if (commands[mainCommand]) { commands[mainCommand](args); return; }
-
-        // Alias de movimiento
-        if (mainCommand === 'ir' || mainCommand === 'entrar' || mainCommand === 'bajar' || mainCommand === 'subir') {
-            handleMovement(args[0]);
+        if (commands[mainCommand]) {
+            if (args.length > 0) {
+                const firstArg = args[0].toLowerCase();
+                const forbiddenArticles = ['el', 'la', 'los', 'las', 'al', 'del', 'a'];
+                if (forbiddenArticles.includes(firstArg)) {
+                    printLine("No uses artículos ni preposiciones ('el', 'al', 'la'...). Escribe solo el verbo y el objeto (ej: " + mainCommand.toUpperCase() + " " + args.slice(1).join(' ').toUpperCase() + ").");
+                    return;
+                }
+            }
+            commands[mainCommand](args);
             return;
         }
 
@@ -564,17 +924,18 @@ document.addEventListener('DOMContentLoaded', () => {
         printLine("<br>", "standard", false);
     }
 
-    function handleMovement(direction) {
+    function handleMovement(rawDirection) {
+        if (!rawDirection) {
+            printLine("¿Adónde quieres ir?");
+            return;
+        }
+
+        const direction = cleanTarget([rawDirection]);
+
         const room = world[gameState.currentLocation];
-        // Simplificación: si hay una salida que coincide con el input (o aproximado)
         if (room.exits) {
             for (const [exitKey, exitRoom] of Object.entries(room.exits)) {
                 if (direction === exitKey) {
-                    // Bloqueo de historia: no salir al pasillo sin abrir puerta (evento choi)
-                    if (gameState.currentLocation === 'pasillo' && exitKey === 'ascensor') {
-                        // Pasar a calle
-                    }
-
                     gameState.currentLocation = exitRoom;
                     printLine(`...`, 'info');
                     setTimeout(() => commands['mirar']([]), 300);
@@ -583,10 +944,6 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
         printLine("No puedes ir por ahí.");
-    }
-
-    function handleTake(item) {
-        // Obsoleto, integrado en commands['coger']
     }
 
     async function startIntro() {
@@ -614,6 +971,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }, 50);
             });
             output.innerHTML = '';
+            userScrolledUp = false;
             isTyping = false; // Permitir que la siguiente línea arranque
         };
 
@@ -631,14 +989,21 @@ document.addEventListener('DOMContentLoaded', () => {
         waitLine.remove();
         // Limpiamos cualquier rastro previo
         output.innerHTML = '';
+        userScrolledUp = false;
         isTyping = false;
 
         // --- SECUENCIA DE INTRO ---
 
         // 1. Bloque inicial (2 líneas)
-        await printLine("Call trans opt: received. 2-19-98 13:24:18 REC:Log>", "intro-text");
+        const now = new Date();
+        const timeStr = [
+            String(now.getHours()).padStart(2, '0'),
+            String(now.getMinutes()).padStart(2, '0'),
+            String(now.getSeconds()).padStart(2, '0')
+        ].join(':');
+        await printLine(`Call trans opt: received. 2-19-1998 ${timeStr} REC:Log>`, "intro-text");
         await printLine("Trace program: running", "intro-text");
-        await waitAndClear(2000);
+        await waitAndClear(2500);
 
         // 2. Líneas individuales
         await printLine("Despierta, Neo...", "intro-text");
