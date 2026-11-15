@@ -230,8 +230,20 @@ document.addEventListener('DOMContentLoaded', () => {
         line.className = 'line ' + type;
         output.appendChild(line);
 
-        if (!animated || skipCurrent) {
-            line.innerHTML = text;
+        if (!animated) {
+            line.innerHTML = text.replace(/<pause(?::\d+)?\/?>/g, '');
+            if (!userScrolledUp) {
+                output.scrollTop = output.scrollHeight;
+            }
+            resolve();
+            processQueue();
+            return;
+        }
+
+        const hasPauseInCurrent = /<pause(?::\d+)?\/?>/.test(text);
+
+        if (skipCurrent && !hasPauseInCurrent) {
+            line.innerHTML = text.replace(/<pause(?::\d+)?\/?>/g, '');
             if (!userScrolledUp || skipCurrent) {
                 output.scrollTop = output.scrollHeight;
             }
@@ -248,32 +260,104 @@ document.addEventListener('DOMContentLoaded', () => {
 
         let currentText = '';
         let i = 0;
+        let typingInterval = null;
 
-        const typingInterval = setInterval(() => {
-            if (i < text.length && !skipCurrent) {
-                if (text.substring(i, i + 4) === '<br>') {
-                    currentText += '<br>';
-                    i += 4;
-                } else {
-                    currentText += text[i];
-                    i++;
-                }
-                contentSpan.innerHTML = currentText;
-                if (!userScrolledUp) {
-                    output.scrollTop = output.scrollHeight;
-                }
-                audio.playKey();
-            } else {
+        function runPause(duration) {
+            if (typingInterval) {
                 clearInterval(typingInterval);
-                if (skipCurrent) contentSpan.innerHTML = text;
-                gameCursor.remove();
-                if (!userScrolledUp || skipCurrent) {
-                    output.scrollTop = output.scrollHeight;
-                }
-                resolve();
-                processQueue();
+                typingInterval = null;
             }
-        }, 30);
+            gameCursor.classList.add('blink');
+
+            let elapsed = 0;
+            const pauseTimer = setInterval(() => {
+                elapsed += 50;
+                if (elapsed >= duration || skipCurrent) {
+                    clearInterval(pauseTimer);
+                    skipCurrent = false;
+                    gameCursor.classList.remove('blink');
+                    startTyping();
+                }
+            }, 50);
+        }
+
+        function startTyping() {
+            typingInterval = setInterval(() => {
+                if (skipCurrent) {
+                    const remainingText = text.substring(i);
+                    const nextPauseMatch = remainingText.match(/<pause(?::(\d+))?\/?>/);
+                    if (nextPauseMatch) {
+                        const nextPauseOffset = remainingText.indexOf(nextPauseMatch[0]);
+                        currentText += remainingText.substring(0, nextPauseOffset);
+                        contentSpan.innerHTML = currentText;
+                        i += nextPauseOffset + nextPauseMatch[0].length;
+                        const duration = nextPauseMatch[1] ? parseInt(nextPauseMatch[1], 10) : 3000;
+                        skipCurrent = false;
+                        if (!userScrolledUp) {
+                            output.scrollTop = output.scrollHeight;
+                        }
+                        runPause(duration);
+                        return;
+                    } else {
+                        clearInterval(typingInterval);
+                        contentSpan.innerHTML = text.replace(/<pause(?::\d+)?\/?>/g, '');
+                        gameCursor.remove();
+                        if (!userScrolledUp || skipCurrent) {
+                            output.scrollTop = output.scrollHeight;
+                        }
+                        resolve();
+                        processQueue();
+                        return;
+                    }
+                }
+
+                if (i < text.length) {
+                    if (text.substring(i, i + 4) === '<br>') {
+                        currentText += '<br>';
+                        i += 4;
+                    } else {
+                        const pauseMatch = text.substring(i).match(/^<pause(?::(\d+))?\/?>/);
+                        if (pauseMatch) {
+                            i += pauseMatch[0].length;
+                            const duration = pauseMatch[1] ? parseInt(pauseMatch[1], 10) : 3000;
+                            runPause(duration);
+                            return;
+                        }
+                        currentText += text[i];
+                        i++;
+                    }
+                    contentSpan.innerHTML = currentText;
+                    if (!userScrolledUp) {
+                        output.scrollTop = output.scrollHeight;
+                    }
+                    audio.playKey();
+                } else {
+                    clearInterval(typingInterval);
+                    gameCursor.remove();
+                    if (!userScrolledUp) {
+                        output.scrollTop = output.scrollHeight;
+                    }
+                    resolve();
+                    processQueue();
+                }
+            }, 30);
+        }
+
+        if (skipCurrent && hasPauseInCurrent) {
+            const firstPauseMatch = text.match(/<pause(?::(\d+))?\/?>/);
+            const pauseOffset = text.indexOf(firstPauseMatch[0]);
+            currentText = text.substring(0, pauseOffset);
+            contentSpan.innerHTML = currentText;
+            i = pauseOffset + firstPauseMatch[0].length;
+            const duration = firstPauseMatch[1] ? parseInt(firstPauseMatch[1], 10) : 3000;
+            skipCurrent = false;
+            if (!userScrolledUp) {
+                output.scrollTop = output.scrollHeight;
+            }
+            runPause(duration);
+        } else {
+            startTyping();
+        }
     }
 
     // --- GAME ENGINE (MATRIX ADAPTATION) ---
@@ -400,20 +484,22 @@ document.addEventListener('DOMContentLoaded', () => {
 
     const dialogs = {
         'choi_encounter': [
+            "<br>",
             "- NEO: Llegas con retraso.",
             "- CHOI: Lo sé. La culpa es de ella. (mira a su novia Dujour)",
             "- NEO: ¿Tienes el dinero?",
-            "- CHOI: agh... Dos mil.",
-            "- NEO: Espera.",
+            "- CHOI: agh...<pause:3000> Dos mil.",
+            "- NEO: Espera.<pause:3000>",
             "<br>",
             "(Le entregas el 'DISCO 067'. Choi sonríe al ver la mercancía.)",
             "<br>",
             "- CHOI: Aleluya, me has salvado tío. Eres mi Jesucristo particular.",
-            "- NEO: Como te pillen utilizando eso!!!",
+            "- NEO: ¡Como te pillen utilizando eso!",
             "- CHOI: Tranquilo, nunca ha pasado. Tú no existes.",
             "- NEO: exacto.",
+            "<br>",
             "- CHOI: ¿Te ocurre algo? Estás más pálido de lo normal.",
-            "- NEO: Mi ordenador está... ¿Alguna vez has tenido la sensación de no saber con seguridad si sueñas o estás despierto?",
+            "- NEO: Mi ordenador está...<pause:3000> ¿Alguna vez has tenido la sensación de no saber con seguridad si sueñas o estás despierto?",
             "- CHOI: Sí, alguna vez... gracias a la mescalina. Es una buena forma de volar.",
             "<br>",
             "(DUJOUR te mira con curiosidad. Lleva un tatuaje en el hombro: un conejo blanco...)",
@@ -423,7 +509,9 @@ document.addEventListener('DOMContentLoaded', () => {
             "- DUJOUR: ¿Nos lo llevamos?",
             "- CHOI: Claro. Ven con nosotros, Neo. Tienes que desconectar.",
             "<br>",
-            "(Decides seguirlos. 'Sigue al conejo blanco'...)"
+            "(Decides seguirlos. 'Sigue al conejo blanco'...)",
+            "<br>",
+            "Sales al pasillo. 'CHOI' y 'DUJOUR' te esperan junto al 'ASCENSOR'."
         ],
 
         'trinity_encounter': [
@@ -450,8 +538,6 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     async function startDialog(dialogId) {
-        isTyping = true;
-        screen.classList.add('typing-active');
         const lines = dialogs[dialogId];
 
         // Encolar todas las líneas a la vez para que el "skip" (Enter) funcione en todo el bloque
@@ -461,14 +547,10 @@ document.addEventListener('DOMContentLoaded', () => {
         // Efectos post-diálogo
         if (dialogId === 'choi_encounter') {
             gameState.currentLocation = 'pasillo'; // Transición lógica
+            gameState.flags.met_choi = true;
 
             // Entregas el disco, así que lo quitamos del inventario
             gameState.inventory = gameState.inventory.filter(item => item !== 'disco');
-
-            setTimeout(() => {
-                printLine("<br>Sales al pasillo. 'CHOI' y 'DUJOUR' te esperan junto al 'ASCENSOR'.", 'info');
-                gameState.flags.met_choi = true;
-            }, 500);
         } else if (dialogId === 'trinity_encounter') {
             setTimeout(startMatrixEffect, 2000);
         }
@@ -937,7 +1019,6 @@ document.addEventListener('DOMContentLoaded', () => {
             for (const [exitKey, exitRoom] of Object.entries(room.exits)) {
                 if (direction === exitKey) {
                     gameState.currentLocation = exitRoom;
-                    printLine(`...`, 'info');
                     setTimeout(() => commands['mirar']([]), 300);
                     return;
                 }
